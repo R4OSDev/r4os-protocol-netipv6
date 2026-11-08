@@ -1,0 +1,19 @@
+R4OS_MODULE_MANIFEST=2
+KIND=R4P
+NAME=NETIPV6
+VERSION=0.1.0
+LANGUAGE=Zig
+SDK_PROFILE=r4os-zig-r4p-generation2
+SOURCE=src/main.zig
+TARGET=/R4OS/PROTOCOLS/NETIPV6.R4P
+IMAGE_SCOPE=slim
+IMPORT=R4DEV:Query2:2
+META=r4p.name=NETIPV6
+META=r4p.role=net.ipv6
+META=r4p.category=net
+META=module.name=R4P_NETIPV6
+META=description=IPv6 packet and interface/address/route owner
+META=feature=dispatch
+META=r4p.dep=net.ethernet
+META=r4p.dep=net.icmpv6
+META=r4p.dep=net.ndp

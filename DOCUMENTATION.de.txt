@@ -1,0 +1,41 @@
+﻿NETIPV6 Anbieter
+=================
+
+Rolle: net.ipv6. IPv6 packets, interfaces, addresses and routes.
+
+Besitz und Operationsvertrag
+---------------------------
+
+Der normative Plattformvertrag liegt im R4OS-Workspace unter
+Repositories/Contract/API/Ipv6Providers.txt. module.R4MF ist die Wahrheit
+fuer Version, SDK-Profil, Imports, Abhaengigkeiten und Imageziel. Der
+gepinnte SDK-Stand liefert ausschliesslich den ausgewaehlten Plattformvertrag.
+
+Dieser Anbieter besitzt IPv6-Interface-, Adress-, Routen-, Paketqueue- und
+Reassemblyzustand. Kernel und NIC transportieren nur kopierte Frames und
+echte Link-/Clockidentitaeten. Der bestehende NIC-Besitzer erzeugt bei
+Registrierung und jedem tatsaechlichen Carrierwechsel eine neue, niemals
+wiederverwendete Linkgeneration; sie ist keine feste Registrierungsnummer.
+
+Up, bestaetigter Multicastempfang, gueltige Clock und echte Entropie sind
+Voraussetzungen. DAD/Nachbarproben werden erst nach echtem TX gezaehlt.
+Fehlende Voraussetzungen oder echte doppelte Link-Local-Adresse liefern
+keine nutzbare IPv6-Faehigkeit. Busy allein ist kein Quellenverlust.
+
+MAC-Link-Local, manuelle Zusatzadressen, /64-SLAAC und getrennte bevorzugte/
+gueltige Lebensdauern sind implementiert. TX maximal1280 IPv6-Bytes,
+Reassembly16 Datagramme mit mindestens1500 IPv6-Bytes und60 Sekunden;
+Overlaps vergiften die ganze Datagrammidentitaet, fragmentiertes ND wird
+verworfen. PMTU/DHCPv6/Forwarding/SEND/Privacy/Redirectrouten fehlen explizit.
+
+Build und Qualifikation
+-----------------------
+
+Linux: ./Build.sh beziehungsweise ./Build.sh test. Windows: Build.bat
+beziehungsweise Build.bat test. Die Komponententests pruefen reine Besitzer-
+und Wirefaelle. Kontrollierter Gast/Peer und reale NIC-/IRQ-/DMAeigenschaften
+brauchen eigene Belege; ein Hosttest beweist keine Hardwarefaehigkeit.
+
+Die TCP-/UDP-/DNS-Endpunktfaehigkeit folgt nicht aus diesen Paket-/
+Codecoperationen. Anwendungen, bestehende Imports und Bedienablaeufe
+werden durch diesen Anbieter nicht migriert.
