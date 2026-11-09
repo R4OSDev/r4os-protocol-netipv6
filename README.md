@@ -33,3 +33,8 @@ Normative contract: `Repositories/Contract/API/Ipv6Providers.txt` in the R4OS
 workspace. `DOCUMENTATION.de.txt` records the provider boundary. Host codec,
 controlled guest/peer and physical NIC/IRQ/DMA qualifications are separate.
 Existing applications keep their current imports and operation.
+
+The copied `ipv6_op_prepare` operation validates/selects the concrete source
+and route for an empty packet before a transport forms its pseudoheader.
+It sends neither neighbor discovery nor payload. Address and routing state
+remain exclusively here; see Contract/API/Ipv6Transport.txt.

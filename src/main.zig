@@ -461,6 +461,11 @@ fn packetOperation(op: u32, input: *const a.ProtocolBuffer, output: *a.ProtocolB
     if (w.zero(request.destination.bytes)) return a.network_error_invalid;
     if (w.zero(result.source.bytes)) result.source = networkAddress(link, link.state.selectSource(request.destination.bytes, link.last_ns) catch |err| return fail(err));
     if (!link.state.owns(result.source.bytes, link.last_ns, false)) return a.network_error_invalid;
+    if (op == a.ipv6_op_prepare) {
+        if (request.bytes != 0) return a.network_error_invalid;
+        _ = link.state.nextHop(result.destination.bytes, link.last_ns) catch |err| return fail(err);
+        return store(a.Ipv6Packet, &result, output);
+    }
     var packet: w.Packet = .{ .source = result.source.bytes, .destination = result.destination.bytes, .next = @intCast(request.next_header), .length = request.bytes };
     @memcpy(packet.payload[0..packet.length], request.payload[0..packet.length]);
     const validated = checksum(&packet);
@@ -506,7 +511,7 @@ export fn ipv6_dispatch(op: u32, input: *const a.ProtocolBuffer, output: *a.Prot
         if (code == 0) output.len = 0;
         return code;
     }
-    if (op == a.ipv6_op_send or op == a.ipv6_op_receive) return packetOperation(op, input, output);
+    if (op == a.ipv6_op_send or op == a.ipv6_op_receive or op == a.ipv6_op_prepare) return packetOperation(op, input, output);
     if (op == a.ipv6_op_configure) {
         const request = load(a.Ipv6AddressConfig, input) orelse return a.network_error_invalid;
         if (output.data == null or output.capacity < @sizeOf(a.Ipv6InterfaceInfo)) return a.network_error_capacity;
