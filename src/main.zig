@@ -2,6 +2,7 @@
 const std = @import("std");
 const sdk = @import("r4os");
 const a = sdk.abi;
+const native = sdk.native_protocol_view;
 const common = sdk.network_family.common;
 const w = @import("wire.zig");
 const address = @import("addresses.zig");
@@ -277,18 +278,23 @@ fn interfaceInfo(link: *const Link) a.Ipv6InterfaceInfo {
     return out;
 }
 fn store(comptime T: type, value: *const T, output: *a.ProtocolBuffer) i32 {
-    if (output.data == null or output.capacity < @sizeOf(T)) return a.network_error_capacity;
-    const bytes: [*]u8 = @ptrCast(output.data.?);
+    // This copied transport permits unaligned storage. Only the local T has
+    // native alignment; the validated byte loan remains within dispatch.
+    var policy = native.Policy.versioned(T, 1, .output, .exact);
+    policy.alignment = 1;
+    const output_address = native.admit(output, policy, .output) catch return a.network_error_capacity;
+    const bytes: [*]u8 = @ptrFromInt(output_address);
     @memcpy(bytes[0..@sizeOf(T)], std.mem.asBytes(value));
-    output.len = @sizeOf(T);
+    native.publish(output, policy, @sizeOf(T)) catch return a.network_error_invalid;
     return 0;
 }
 fn load(comptime T: type, input: *const a.ProtocolBuffer) ?T {
-    if (input.data == null or input.len != @sizeOf(T)) return null;
+    var policy = native.Policy.versioned(T, 1, .input, .exact);
+    policy.alignment = 1;
+    const input_address = native.admit(input, policy, .input) catch return null;
     var value: T = undefined;
-    const bytes: [*]const u8 = @ptrCast(input.data.?);
+    const bytes: [*]const u8 = @ptrFromInt(input_address);
     @memcpy(std.mem.asBytes(&value), bytes[0..@sizeOf(T)]);
-    if (value.version != 1 or value.size != @sizeOf(T)) return null;
     return value;
 }
 fn ndReceive(link: *Link, packet: *const w.Packet, mac: [6]u8) i32 {

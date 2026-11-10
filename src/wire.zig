@@ -1,5 +1,6 @@
 //! Bounded IPv6 host parsing/reassembly. No addresses/routes or NIC owner here.
 const std = @import("std");
+const cursor = @import("r4os").binary_cursor;
 pub const Address = [16]u8;
 pub const capacity = 1504;
 pub const Error = error{ Invalid, Discard, Unsupported, Capacity, Pending, Overlap, ParameterProblem };
@@ -188,9 +189,9 @@ fn walk(packet: *Packet, bytes: []const u8, initial_next: u8, base: usize, allow
         if (next == 44) {
             if (!allow_fragment) return error.Invalid;
             if (bytes[pos + 1] != 0) return error.Invalid;
-            const flags = std.mem.readInt(u16, bytes[pos + 2 ..][0..2], .big);
+            const flags = be16(bytes[pos + 2 ..][0..2]);
             if (flags & 6 != 0) return error.Invalid;
-            const fragment: FragmentView = .{ .pos = pos + 8, .next = bytes[pos], .offset = @as(usize, flags & 0xfff8), .more = flags & 1 != 0, .id = std.mem.readInt(u32, bytes[pos + 4 ..][0..4], .big) };
+            const fragment: FragmentView = .{ .pos = pos + 8, .next = bytes[pos], .offset = @as(usize, flags & 0xfff8), .more = flags & 1 != 0, .id = be32(bytes[pos + 4 ..][0..4]) };
             // RFC7112: first fragment contains the complete extension chain
             // and upper header. Validate without joining or mutating state.
             if (fragment.offset == 0 and fragment.more) {
@@ -229,7 +230,7 @@ fn walk(packet: *Packet, bytes: []const u8, initial_next: u8, base: usize, allow
 pub fn parse(reassembly: *Reassembly, interface: u32, generation: u64, clock: u32, now: u64, bytes: []const u8, reject: *Reject) Error!Packet {
     reject.* = .{};
     if (bytes.len < 40 or bytes[0] >> 4 != 6) return error.Invalid;
-    const length: usize = std.mem.readInt(u16, bytes[4..6], .big);
+    const length: usize = be16(bytes[4..6]);
     if (length > bytes.len - 40 or length > capacity or length == 0 and bytes[6] != 59) return error.Invalid;
     var packet: Packet = .{ .hop = bytes[7] };
     @memcpy(&packet.source, bytes[8..24]);
@@ -255,11 +256,21 @@ pub fn build(source: Address, destination: Address, next: u8, hop: u8, payload: 
     if (zero(destination) or multicast(source) or mapped(source) or mapped(destination) or loopback(source) or loopback(destination) or invalidMulticast(destination) or hop == 0) return error.Invalid;
     @memset(output[0..40], 0);
     output[0] = 0x60;
-    std.mem.writeInt(u16, output[4..6], @intCast(payload.len), .big);
+    var writer = cursor.Writer.init(output[4..6]) catch unreachable;
+    writer.writeInt(u16, @intCast(payload.len), .big) catch unreachable;
     output[6] = next;
     output[7] = hop;
     @memcpy(output[8..24], &source);
     @memcpy(output[24..40], &destination);
     @memcpy(output[40..][0..payload.len], payload);
     return 40 + payload.len;
+}
+
+fn be16(bytes: []const u8) u16 {
+    var reader = cursor.Reader.init(bytes) catch unreachable;
+    return reader.readInt(u16, .big) catch unreachable;
+}
+fn be32(bytes: []const u8) u32 {
+    var reader = cursor.Reader.init(bytes) catch unreachable;
+    return reader.readInt(u32, .big) catch unreachable;
 }
