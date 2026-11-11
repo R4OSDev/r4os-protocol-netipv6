@@ -206,3 +206,7 @@ test "manual prefix lifetime follows all owned addresses and survives RA withdra
     try iface.remove(last);
     try std.testing.expectError(error.NoRoute, iface.nextHop(source, 100));
 }
+
+test {
+    _ = @import("main.zig");
+}

@@ -548,23 +548,113 @@ export fn ipv6_dispatch(op: u32, input: *const a.ProtocolBuffer, output: *a.Prot
     }
     if (request.provider == 0 or request.interface_id == 0 or request.generation == 0) return a.network_error_invalid;
     var cursor: u32 = 0;
-    if (op == a.ipv6_op_address) for (link.state.addresses) |row| {
-        if (!row.used) continue;
-        if (cursor == request.cursor) {
-            const result: a.Ipv6AddressInfo = .{ .address = networkAddress(link, row.ip), .provider = link.info.provider, .generation = link.info.generation, .preferred_until_ns = row.preferred_until, .valid_until_ns = row.valid_until, .flags = row.flags, .prefix_length = row.bits };
-            return store(a.Ipv6AddressInfo, &result, output);
+    if (op == a.ipv6_op_address) {
+        for (link.state.addresses) |row| {
+            if (!row.used) continue;
+            if (cursor == request.cursor) {
+                const result: a.Ipv6AddressInfo = .{ .address = networkAddress(link, row.ip), .provider = link.info.provider, .generation = link.info.generation, .preferred_until_ns = row.preferred_until, .valid_until_ns = row.valid_until, .flags = row.flags, .prefix_length = row.bits };
+                return store(a.Ipv6AddressInfo, &result, output);
+            }
+            cursor += 1;
         }
-        cursor += 1;
-    } else for (link.state.routes) |row| {
-        if (!row.used) continue;
-        if (cursor == request.cursor) {
-            const result: a.Ipv6RouteInfo = .{ .prefix = networkAddress(link, row.prefix), .gateway = networkAddress(link, row.gateway), .provider = link.info.provider, .generation = link.info.generation, .valid_until_ns = row.valid_until, .prefix_length = row.bits, .flags = row.flags };
-            return store(a.Ipv6RouteInfo, &result, output);
+    } else {
+        for (link.state.routes) |row| {
+            if (!row.used) continue;
+            if (cursor == request.cursor) {
+                const result: a.Ipv6RouteInfo = .{ .prefix = networkAddress(link, row.prefix), .gateway = networkAddress(link, row.gateway), .provider = link.info.provider, .generation = link.info.generation, .valid_until_ns = row.valid_until, .prefix_length = row.bits, .flags = row.flags };
+                return store(a.Ipv6RouteInfo, &result, output);
+            }
+            cursor += 1;
         }
-        cursor += 1;
-    };
+    }
     return a.network_error_not_found;
 }
 fn tryExpires(now: u64, duration: u64) ?u64 {
     return address.expires(now, duration) catch null;
+}
+
+test "public IPv6 address and route dispatch select distinct records and independent ends" {
+    const Peer = struct {
+        const info: a.NetworkLinkInfo = .{
+            .index = 0,
+            .interface_id = 17,
+            .provider = 31,
+            .generation = 43,
+            .mtu = 1500,
+            .flags = 15,
+            .mac = .{ 0x52, 0x54, 0, 0x12, 0x34, 0x56 },
+            .clock = .{ .flags = a.monotonic_clock_flag_valid, .source = 1, .generation = 9, .instant_ns = 1_000_000_000, .resolution_ns = 1, .event_requested_hz = 1000 },
+        };
+        fn link(request: *const a.NetworkLinkRequest, out: *a.NetworkLinkInfo) callconv(.c) i32 {
+            if (request.op != a.network_link_op_info or request.index != 0) return a.network_error_not_found;
+            out.* = info;
+            return 0;
+        }
+        fn entropy(out: *a.EntropySourceInfo) callconv(.c) i32 {
+            out.* = .{ .state = a.entropy_state_ready, .flags = a.entropy_source_flag_registered, .generation = 7 };
+            return 0;
+        }
+        fn log(_: [*:0]const u8) callconv(.c) void {}
+        fn role(_: [*:0]const u8, _: u32, _: u32) callconv(.c) i32 {
+            return 0;
+        }
+        fn status(_: u32, _: [*:0]const u8) callconv(.c) i32 {
+            return 0;
+        }
+        fn dependency(_: [*:0]const u8) callconv(.c) i32 {
+            return 0;
+        }
+        fn alloc(_: u32, _: u32) callconv(.c) ?*anyopaque {
+            return null;
+        }
+        fn free(_: ?*anyopaque, _: u32) callconv(.c) void {}
+        fn read(_: [*:0]const u8, _: [*]u8, _: u32) callconv(.c) i32 {
+            return -1;
+        }
+    };
+    var table: a.ProtocolApi2 = .{
+        .magic = sdk.technical2.abi.protocol_magic,
+        .version = sdk.technical2.abi.protocol_version,
+        .size = @sizeOf(a.ProtocolApi2),
+        .reserved = 0,
+        .log_info = Peer.log,
+        .log_warn = Peer.log,
+        .log_error = Peer.log,
+        .register_role = Peer.role,
+        .set_status = Peer.status,
+        .dependency_status = Peer.dependency,
+        .alloc = Peer.alloc,
+        .free = Peer.free,
+        .file_read = Peer.read,
+        .link_io = Peer.link,
+        .entropy_source_info = Peer.entropy,
+    };
+    api = sdk.technical2.Protocol.init(&table) orelse return error.TestApi;
+    defer {
+        api = null;
+        links = @splat(.{});
+    }
+    links = @splat(.{});
+    links[0] = .{ .present = true, .ready = true, .info = Peer.info, .last_ns = Peer.info.clock.instant_ns, .entropy_generation = 7, .state = try address.Interface.init(Peer.info.mac, Peer.info.clock.instant_ns, .{ 1, 2, 3, 4, 5, 6 }) };
+    var request: a.Ipv6InterfaceQuery = .{ .index = 0, .interface_id = 17, .provider = 31, .generation = 43 };
+    var input: a.ProtocolBuffer = .{ .data = &request, .len = @sizeOf(@TypeOf(request)), .capacity = @sizeOf(@TypeOf(request)) };
+    var info: a.Ipv6InterfaceInfo = .{};
+    var output: a.ProtocolBuffer = .{ .data = &info, .capacity = @sizeOf(@TypeOf(info)) };
+    try std.testing.expectEqual(@as(i32, 0), ipv6_dispatch(a.ipv6_op_info, &input, &output));
+    try std.testing.expectEqual(@as(u32, 1), info.address_count);
+    try std.testing.expectEqual(@as(u32, 1), info.route_count);
+    var route: a.Ipv6RouteInfo = .{};
+    output = .{ .data = &route, .capacity = @sizeOf(@TypeOf(route)) };
+    try std.testing.expectEqual(@as(i32, 0), ipv6_dispatch(a.ipv6_op_route, &input, &output));
+    try std.testing.expectEqual(@as(u32, 10), route.prefix_length);
+    try std.testing.expectEqual(@as(u32, 17), route.prefix.interface_id);
+    request.cursor = info.route_count;
+    try std.testing.expectEqual(a.network_error_not_found, ipv6_dispatch(a.ipv6_op_route, &input, &output));
+    var entry: a.Ipv6AddressInfo = .{};
+    output = .{ .data = &entry, .capacity = @sizeOf(@TypeOf(entry)) };
+    request.cursor = 0;
+    try std.testing.expectEqual(@as(i32, 0), ipv6_dispatch(a.ipv6_op_address, &input, &output));
+    try std.testing.expectEqual(@as(u32, 17), entry.address.scope_id);
+    request.cursor = info.address_count;
+    try std.testing.expectEqual(a.network_error_not_found, ipv6_dispatch(a.ipv6_op_address, &input, &output));
 }

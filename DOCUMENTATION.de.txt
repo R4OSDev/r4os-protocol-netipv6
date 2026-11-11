@@ -39,3 +39,16 @@ brauchen eigene Belege; ein Hosttest beweist keine Hardwarefaehigkeit.
 Die TCP-/UDP-/DNS-Endpunktfaehigkeit folgt nicht aus diesen Paket-/
 Codecoperationen. Anwendungen, bestehende Imports und Bedienablaeufe
 werden durch diesen Anbieter nicht migriert.
+
+
+Oeffentliche Adress- und Routenabfrage ab0.1.3
+-------------------------------------------
+Der normale IPv6-Dispatch bearbeitet Adressen und Routen in eigenen
+ausdruecklichen Zweigen. Jeder Cursor zaehlt die belegten Eintraege seines
+Bestands. Das jeweilige Ende liefert network_error_not_found.
+Der bestehende packet_tests-Einstieg ruft den echten Produktionsdispatch
+mit kopierten Records und einer begrenzten Link-Faellvorgabe auf. Er prueft
+Info, beide Recordarten und beide genauen Bestandsenden.
+Die normalen IPCONFIG- und PING-Verbraucher haben in Migration0.90.69
+die vorherige Bindung des else an die innere for-Schleife aufgedeckt.
+Die tatsaechliche Gastabnahme wird im Migrationsbeleg gefuehrt.

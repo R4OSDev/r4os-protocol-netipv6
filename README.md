@@ -32,9 +32,21 @@ dependencies and image placement. The pinned SDK selects the platform contract.
 Normative contract: `Repositories/Contract/API/Ipv6Providers.txt` in the R4OS
 workspace. `DOCUMENTATION.de.txt` records the provider boundary. Host codec,
 controlled guest/peer and physical NIC/IRQ/DMA qualifications are separate.
-Existing applications keep their current imports and operation.
+Normal consumers use the copied family-aware contract through their selected platform profile.
 
 The copied `ipv6_op_prepare` operation validates/selects the concrete source
 and route for an empty packet before a transport forms its pseudoheader.
 It sends neither neighbor discovery nor payload. Address and routing state
 remain exclusively here; see Contract/API/Ipv6Transport.txt.
+
+
+Public address/route enumeration in0.1.3
+---------------------------------------
+The normal IPv6 dispatch handles the address and route operations in separate
+explicit branches. Each cursor walks only its own dense set of used rows.
+The end of either set returns network_error_not_found. A route can be queried
+when Info advertises routes. The existing packet test entry now calls the
+actual production dispatch with original copied records and a bounded link
+fixture. It checks both row kinds and both exact enumeration ends.
+Migration0.90.69 exposed the former branch binding through normal IPCONFIG
+and PING consumers. Their actual guest qualification is recorded separately.
